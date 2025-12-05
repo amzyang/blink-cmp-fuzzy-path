@@ -9,6 +9,7 @@ local defaults = {
 	search_hidden = false,
 	search_gitignore = true,
 	relative_paths = true,
+	search_dir = nil, -- nil = use cwd, string = specific directory
 }
 
 -- Validate configuration
@@ -21,6 +22,13 @@ local function validate_config(config)
 		search_hidden = { config.search_hidden, "boolean" },
 		search_gitignore = { config.search_gitignore, "boolean" },
 		relative_paths = { config.relative_paths, "boolean" },
+		search_dir = {
+			config.search_dir,
+			function(v)
+				return v == nil or type(v) == "string"
+			end,
+			"nil or string",
+		},
 	})
 
 	-- Validate trigger_char is a single character
@@ -36,6 +44,19 @@ local function validate_config(config)
 	-- Validate max_results is positive
 	if config.max_results < 1 then
 		error("max_results must be at least 1")
+	end
+
+	-- Validate search_dir if provided
+	if config.search_dir ~= nil and config.search_dir ~= "" then
+		local expanded = vim.fn.expand(config.search_dir)
+		local abs_path = vim.fn.fnamemodify(expanded, ":p")
+
+		if vim.fn.isdirectory(abs_path) ~= 1 then
+			error(string.format("search_dir '%s' is not a valid directory", config.search_dir))
+		end
+
+		-- Normalize to absolute path
+		config.search_dir = abs_path
 	end
 end
 

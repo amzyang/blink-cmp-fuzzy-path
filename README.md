@@ -73,6 +73,29 @@ Default configuration:
 }
 ```
 
+### Important: ClaudeCode and OpenCode Users
+
+⚠️ **Latest versions of ClaudeCode and OpenCode** open Neovim in their own configuration directories, not your project root. This means fuzzy path searches will start from the wrong location.
+
+**Solution**: Manually set the search directory to your actual project root. You can automate this with a telescope-based directory picker or other directory selection method.
+
+Example configuration with manual directory setting:
+
+```lua
+{
+  'newtoallofthis123/blink-cmp-fuzzy-path',
+  opts = {
+    filetypes = { "markdown", "json" },
+    trigger_char = "@",
+    max_results = 5,
+    -- Add search_directory option when it's implemented
+    -- search_directory = "/path/to/your/project"
+  }
+}
+```
+
+You can also create a keybinding to dynamically set the search directory using Telescope or another directory picker, ensuring the plugin searches from your intended project root rather than the editor's config directory.
+
 ### Example: Custom Configuration
 
 ```lua

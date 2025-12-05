@@ -6,17 +6,27 @@ local function command_exists(cmd)
 end
 
 -- Make path relative to current buffer's directory
-local function make_relative_path(filepath, bufpath)
+local function make_relative_path(filepath, bufpath, search_base)
 	if not bufpath or bufpath == "" then
 		return filepath
+	end
+
+	-- Use search_base if provided, otherwise fall back to cwd
+	-- Expand ~ and normalize the base directory
+	local base_dir = search_base or vim.fn.getcwd()
+	base_dir = vim.fn.expand(base_dir)
+	base_dir = vim.fn.fnamemodify(base_dir, ":p")
+	-- Remove trailing slash
+	if vim.endswith(base_dir, "/") then
+		base_dir = base_dir:sub(1, -2)
 	end
 
 	local buf_dir = vim.fn.fnamemodify(bufpath, ":h")
 	local abs_filepath = vim.fn.fnamemodify(filepath, ":p")
 
-	-- If filepath is already relative, make it absolute first
+	-- If filepath is already relative, make it absolute first using the search base directory
 	if not vim.startswith(filepath, "/") then
-		abs_filepath = vim.fn.fnamemodify(vim.fn.getcwd() .. "/" .. filepath, ":p")
+		abs_filepath = vim.fn.fnamemodify(base_dir .. "/" .. filepath, ":p")
 	end
 
 	-- Check if file is within buffer's directory
@@ -26,7 +36,7 @@ local function make_relative_path(filepath, bufpath)
 		return rel_path
 	end
 
-	-- Otherwise return relative to cwd
+	-- Otherwise return relative to cwd (with ~ expansion)
 	return vim.fn.fnamemodify(abs_filepath, ":~:.")
 end
 
@@ -57,6 +67,12 @@ local function search_with_fd_async(query, config, callback)
 		table.insert(args, query)
 	end
 
+	-- Determine search path
+	local search_path = "."
+	if config.search_dir and config.search_dir ~= "" then
+		search_path = config.search_dir
+	end
+
 	local stdout = vim.loop.new_pipe(false)
 	local handle, pid
 	local results = {}
@@ -67,6 +83,7 @@ local function search_with_fd_async(query, config, callback)
 		{
 			args = args,
 			stdio = { nil, stdout, nil },
+			cwd = search_path,
 		},
 		vim.schedule_wrap(function(code, signal)
 			stdout:close()
@@ -132,6 +149,12 @@ local function search_with_rg_async(query, config, callback)
 		table.insert(args, "--no-ignore")
 	end
 
+	-- Determine search path
+	local search_path = "."
+	if config.search_dir and config.search_dir ~= "" then
+		search_path = config.search_dir
+	end
+
 	local stdout = vim.loop.new_pipe(false)
 	local handle, pid
 	local all_files = {}
@@ -142,6 +165,7 @@ local function search_with_rg_async(query, config, callback)
 		{
 			args = args,
 			stdio = { nil, stdout, nil },
+			cwd = search_path,
 		},
 		vim.schedule_wrap(function(code, signal)
 			stdout:close()
@@ -232,8 +256,10 @@ function M.search_files_async(query, config, bufpath, callback)
 	local cancel_fn = search_func(query, config, function(files)
 		-- Convert to relative paths if configured
 		if config.relative_paths and bufpath then
+			-- Determine the search base directory
+			local search_base = config.search_dir or vim.fn.getcwd()
 			files = vim.tbl_map(function(file)
-				return make_relative_path(file, bufpath)
+				return make_relative_path(file, bufpath, search_base)
 			end, files)
 		end
 
