@@ -77,24 +77,35 @@ Default configuration:
 
 ⚠️ **Latest versions of ClaudeCode and OpenCode** open Neovim in their own configuration directories, not your project root. This means fuzzy path searches will start from the wrong location.
 
-**Solution**: Manually set the search directory to your actual project root. You can automate this with a telescope-based directory picker or other directory selection method.
+**Solution**: Use the `:FuzzySearchPath` command to set the correct search directory:
 
-Example configuration with manual directory setting:
-
-```lua
-{
-  'newtoallofthis123/blink-cmp-fuzzy-path',
-  opts = {
-    filetypes = { "markdown", "json" },
-    trigger_char = "@",
-    max_results = 5,
-    -- Add search_directory option when it's implemented
-    -- search_directory = "/path/to/your/project"
-  }
-}
+```vim
+:FuzzySearchPath /path/to/your/project
 ```
 
-You can also create a keybinding to dynamically set the search directory using Telescope or another directory picker, ensuring the plugin searches from your intended project root rather than the editor's config directory.
+You can automate this with a telescope-based directory picker or keybinding:
+
+```lua
+-- Example: Set up a keybinding to pick directory with Telescope
+vim.keymap.set('n', '<leader>fp', function()
+  require('telescope.builtin').find_files({
+    prompt_title = 'Set Fuzzy Search Path',
+    cwd = vim.fn.getcwd(),
+    attach_mappings = function(prompt_bufnr, map)
+      local actions = require('telescope.actions')
+      local action_state = require('telescope.actions.state')
+
+      map('i', '<CR>', function()
+        local selection = action_state.get_selected_entry()
+        actions.close(prompt_bufnr)
+        local dir = vim.fn.fnamemodify(selection.path, ':h')
+        vim.cmd('FuzzySearchPath ' .. dir)
+      end)
+      return true
+    end,
+  })
+end, { desc = 'Set fuzzy search path' })
+```
 
 ### Example: Custom Configuration
 
