@@ -1,5 +1,27 @@
 local M = {}
 
+--- 使用 Neovim 内置的 matchfuzzy 进行模糊匹配
+---@param files string[] 文件列表
+---@param query string 查询词
+---@param max_results number 最大结果数
+---@return string[] 匹配的文件（已按匹配度排序）
+local function fuzzy_filter(files, query, max_results)
+	if not query or query == "" then
+		local results = {}
+		for i = 1, math.min(#files, max_results) do
+			results[i] = files[i]
+		end
+		return results
+	end
+	-- matchfuzzy 返回按匹配度排序的结果
+	local matched = vim.fn.matchfuzzy(files, query)
+	local results = {}
+	for i = 1, math.min(#matched, max_results) do
+		results[i] = matched[i]
+	end
+	return results
+end
+
 -- Check if a command exists
 local function command_exists(cmd)
 	return vim.fn.executable(cmd) == 1
@@ -65,13 +87,9 @@ local function search_with_fd_async(query, config, callback)
 		table.insert(args, "--no-ignore")
 	end
 
+	-- 获取足够多的文件供 Lua 侧过滤（不再用 fd 的 glob 匹配）
 	table.insert(args, "--max-results")
-	table.insert(args, tostring(config.max_results))
-
-	-- Add query as pattern
-	if query and query ~= "" then
-		table.insert(args, query)
-	end
+	table.insert(args, "500")
 
 	-- Determine search path
 	local search_path = "."
@@ -97,15 +115,16 @@ local function search_with_fd_async(query, config, callback)
 				handle:close()
 			end
 
-			-- Process any remaining data
+			-- 收集所有文件后用 matchfuzzy 过滤和排序
+			local all_files = {}
 			if stdout_data ~= "" then
 				for line in stdout_data:gmatch("([^\n]+)") do
 					if line ~= "" then
-						table.insert(results, line)
+						table.insert(all_files, line)
 					end
 				end
 			end
-
+			local results = fuzzy_filter(all_files, query, config.max_results)
 			callback(results)
 		end)
 	)
@@ -188,24 +207,8 @@ local function search_with_rg_async(query, config, callback)
 				end
 			end
 
-			-- Filter files by query if provided
-			local results = {}
-			if query and query ~= "" then
-				for _, file in ipairs(all_files) do
-					if string.find(file:lower(), query:lower(), 1, true) then
-						table.insert(results, file)
-						if #results >= config.max_results then
-							break
-						end
-					end
-				end
-			else
-				-- Return limited results if no query
-				for i = 1, math.min(#all_files, config.max_results) do
-					table.insert(results, all_files[i])
-				end
-			end
-
+			-- 使用 matchfuzzy 过滤和排序
+			local results = fuzzy_filter(all_files, query, config.max_results)
 			callback(results)
 		end)
 	)
